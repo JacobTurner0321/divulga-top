@@ -1,0 +1,8 @@
+RewriteEngine On
+
+# Serve existing files directly (optional assets)
+RewriteCond %{REQUEST_FILENAME} -f
+RewriteRule ^ - [L]
+
+# Proxy everything else to the new app
+RewriteRule ^(.*)$ proxy.php [QSA,L]

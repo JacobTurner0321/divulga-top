@@ -1,0 +1,37 @@
+{
+  "name": "divulga-top",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@sparticuz/chromium-min": "^149.0.0",
+    "@upstash/redis": "^1.38.0",
+    "@vercel/blob": "^2.5.0",
+    "bcryptjs": "^3.0.3",
+    "cheerio": "^1.2.0",
+    "jose": "^6.2.3",
+    "next": "14.2.35",
+    "puppeteer-core": "^25.3.0",
+    "react": "^18",
+    "react-dom": "^18",
+    "server-only": "^0.0.1",
+    "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@types/uuid": "^10.0.0",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.35",
+    "postcss": "^8",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,26 @@
+HOSTINGER — ATIVAR divulga.top NO NOVO SISTEMA
+==============================================
+
+OPCAO A (RECOMENDADA — 2 minutos, sem aviso do Chrome)
+-------------------------------------------------------
+1. Entre no hPanel Hostinger: https://hpanel.hostinger.com
+2. Dominios → divulga.top → DNS / Zona DNS
+3. Edite o registro A de @ :
+   - Valor antigo: 77.37.127.45
+   - Valor novo:   76.76.21.21
+4. Salve e aguarde 5–30 minutos
+5. Acesse: https://divulga.top/admin
+   Login: betobrinco@gmail.com | Senha: divulga2026
+
+OPCAO B (Proxy PHP — se nao quiser mudar DNS agora)
+---------------------------------------------------
+1. hPanel → Arquivos → Gerenciador de Arquivos → public_html
+2. Renomeie a pasta wp-content para wp-content-backup (opcional)
+3. Faca backup do index.php e .htaccess atuais
+4. Envie proxy.php e .htaccess desta pasta para public_html
+5. Acesse https://divulga.top
+
+IMPORTANTE
+----------
+- NAO use divulga-top.vercel.app — o Chrome mostra aviso de site falso
+- Use SEMPRE: https://divulga.top

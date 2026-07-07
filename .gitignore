@@ -41,3 +41,8 @@ data/
 # test artifacts
 scripts/*.html
 scripts/cookies.txt
+.tools/
+prod-page.js
+import.json
+login.json
+c.txt

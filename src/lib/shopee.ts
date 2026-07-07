@@ -393,7 +393,7 @@ async function fetchShopeePageWithAgent(url: string, userAgent: string): Promise
 }
 
 export async function fetchShopeeFromSocialCrawler(urls: string[]): Promise<ShopeeProductData | null> {
-  const uniqueUrls = [...new Set(urls.filter(Boolean))];
+  const uniqueUrls = Array.from(new Set(urls.filter(Boolean)));
 
   for (const url of uniqueUrls) {
     for (const agent of SOCIAL_CRAWLER_AGENTS) {
@@ -478,7 +478,7 @@ async function fetchShopeeWithBrowser(url: string): Promise<ShopeeProductData | 
     const headlessType = isLocal ? true : "shell";
     const launchArgs = isLocal
       ? ["--no-sandbox", "--disable-setuid-sandbox"]
-      : puppeteer.default.defaultArgs({ args: chromium.default.args, headless: headlessType });
+      : await puppeteer.default.defaultArgs({ args: chromium.default.args, headless: headlessType });
 
     const browser = await puppeteer.default.launch({
       args: launchArgs,
@@ -526,7 +526,7 @@ export async function scrapeShopeeProduct(
 
   const canonical = canonicalShopeeUrl(ids);
   const slugUrl = await resolveShopeeSlugUrl(canonical);
-  const urlsToTry = [...new Set([slugUrl, canonical, resolvedUrl])];
+  const urlsToTry = Array.from(new Set([slugUrl, canonical, resolvedUrl]));
 
   const attempts: Array<() => Promise<ShopeeProductData | null>> = [
     () => fetchFromAffiliateApi(ids, credentials),

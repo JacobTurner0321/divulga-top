@@ -65,11 +65,14 @@ function extractJsonLd(html: string) {
 }
 
 async function resolveRedirects(url: string): Promise<string> {
+  const isShopee = /shopee\.|shp\.ee|s\.shopee\./i.test(url);
+  const userAgent = isShopee ? "facebookexternalhit/1.1" : USER_AGENT;
+
   try {
     const res = await proxyFetch(url, {
       method: "GET",
       redirect: "follow",
-      headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+      headers: { "User-Agent": userAgent, Accept: "text/html" },
     });
     return res.url || url;
   } catch {

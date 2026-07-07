@@ -29,3 +29,8 @@ export interface AffiliateConfig {
   platform: Platform;
   affiliate_id: string;
 }
+
+export interface AppSettings {
+  shopee_affiliate_app_id: string;
+  shopee_affiliate_secret: string;
+}

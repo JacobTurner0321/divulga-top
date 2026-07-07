@@ -4,16 +4,17 @@ import path from "path";
 import bcrypt from "bcryptjs";
 import { put, get } from "@vercel/blob";
 import { Redis } from "@upstash/redis";
-import type { Platform, Site, Product, AffiliateConfig } from "./types";
+import type { Platform, Site, Product, AffiliateConfig, AppSettings } from "./types";
 import { isValidProductTitle } from "./validate";
 
-export type { Platform, Site, Product, AffiliateConfig } from "./types";
+export type { Platform, Site, Product, AffiliateConfig, AppSettings } from "./types";
 
 interface Store {
   admin_users: { id: number; email: string; password_hash: string }[];
   sites: Site[];
   affiliate_ids: AffiliateConfig[];
   products: Product[];
+  settings: AppSettings;
   nextProductId: number;
   nextAffiliateId: number;
 }
@@ -40,6 +41,7 @@ function defaultStore(): Store {
       }))
     ),
     products: [],
+    settings: { shopee_affiliate_app_id: "", shopee_affiliate_secret: "" },
     nextProductId: 1,
     nextAffiliateId: 10,
   };
@@ -141,6 +143,11 @@ function normalizeStore(store: Store): { store: Store; changed: boolean } {
   const before = store.products.length;
   store.products = store.products.filter((p) => isValidProductTitle(p.title));
   if (store.products.length !== before) changed = true;
+
+  if (!store.settings) {
+    store.settings = { shopee_affiliate_app_id: "", shopee_affiliate_secret: "" };
+    changed = true;
+  }
 
   return { store, changed };
 }
@@ -332,4 +339,19 @@ export async function updateSite(id: number, name: string, logo_url: string | nu
 export async function getAdminByEmail(email: string) {
   const store = await getStore();
   return store.admin_users.find((u) => u.email === email);
+}
+
+export async function getSettings(): Promise<AppSettings> {
+  const store = await getStore();
+  return store.settings || { shopee_affiliate_app_id: "", shopee_affiliate_secret: "" };
+}
+
+export async function saveSettings(settings: Partial<AppSettings>) {
+  const store = await getStore();
+  store.settings = {
+    shopee_affiliate_app_id: settings.shopee_affiliate_app_id?.trim() ?? store.settings?.shopee_affiliate_app_id ?? "",
+    shopee_affiliate_secret: settings.shopee_affiliate_secret?.trim() ?? store.settings?.shopee_affiliate_secret ?? "",
+  };
+  await persistStore(store);
+  return store.settings;
 }

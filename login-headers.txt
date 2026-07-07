@@ -1,0 +1,11 @@
+HTTP/1.1 500 Internal Server Error
+Cache-Control: public, max-age=0, must-revalidate
+Content-Length: 0
+Date: Tue, 07 Jul 2026 13:38:15 GMT
+Server: Vercel
+Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+Vary: RSC, Next-Router-State-Tree, Next-Router-Prefetch
+X-Matched-Path: /api/auth/login
+X-Vercel-Cache: MISS
+X-Vercel-Id: arn1::iad1::9np2n-1783431494800-74def11a6426
+

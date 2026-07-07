@@ -25,6 +25,11 @@ export interface ShopeeProductData {
   discount_percent: number | null;
 }
 
+export interface ShopeeApiCredentials {
+  appId: string;
+  secret: string;
+}
+
 function parsePrice(text: string | undefined | null): number | null {
   if (!text) return null;
   const cleaned = text.replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".");
@@ -77,6 +82,68 @@ async function proxyFetch(url: string, init?: RequestInit, render = false): Prom
     return fetch(`https://api.scraperapi.com?${params}`, init);
   }
   return fetch(url, init);
+}
+
+/** Direct fetch — never route social-crawler requests through ScraperAPI. */
+async function directFetch(url: string, userAgent: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent": userAgent,
+        Accept: "text/html,application/xhtml+xml",
+        "Accept-Language": "pt-BR,pt;q=0.9",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(25000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    if (html.includes('"error":90309999') || html.length < 200) return null;
+    return html;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchHtmlViaScraperApi(url: string, userAgent: string): Promise<string | null> {
+  const key = process.env.SCRAPER_API_KEY;
+  if (!key) return null;
+
+  try {
+    const params = new URLSearchParams({
+      api_key: key,
+      url,
+      country_code: "br",
+      render: "true",
+    });
+    const res = await fetch(`https://api.scraperapi.com?${params}`, {
+      headers: { "User-Agent": userAgent },
+      signal: AbortSignal.timeout(55000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    if (html.includes('"error":90309999') || html.length < 200) return null;
+    return html;
+  } catch {
+    return null;
+  }
+}
+
+export async function resolveShopeeSlugUrl(url: string): Promise<string> {
+  for (const agent of SOCIAL_CRAWLER_AGENTS) {
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        redirect: "follow",
+        headers: { "User-Agent": agent, Accept: "text/html" },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (res.url && res.url.includes("shopee.com.br")) return res.url;
+    } catch {
+      /* try next agent */
+    }
+  }
+  return url;
 }
 
 function mapShopeeItem(item: Record<string, unknown>): ShopeeProductData | null {
@@ -159,11 +226,30 @@ function isGenericShopeeTitle(title: string): boolean {
   return !t || t.includes("shopee__") || t === "shopee" || t === "shopee brasil";
 }
 
+function extractMetaRegex(html: string): { title: string; image: string | null } | null {
+  const ogTitle =
+    html.match(/property=["']og:title["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
+    html.match(/content=["']([^"']+)["'][^>]*property=["']og:title["']/i)?.[1] ||
+    html.match(/<h1[^>]*class=["'][^"']*dMAFry[^"']*["'][^>]*>([^<]+)</i)?.[1]?.trim() ||
+    html.match(/<h1[^>]*>([^<]{4,})</i)?.[1]?.trim();
+
+  if (!ogTitle || isGenericShopeeTitle(ogTitle)) return null;
+
+  const ogImage =
+    html.match(/property=["']og:image["'][^>]*content=["']([^"']+)["']/i)?.[1] ||
+    html.match(/content=["']([^"']+)["'][^>]*property=["']og:image["']/i)?.[1] ||
+    html.match(/elementtiming=["']shopee:heroComponentPaint["'][^>]*src=["']([^"']+)["']/i)?.[1] ||
+    html.match(/fetchPriority=["']high["'][^>]*src=["']([^"']+)["']/i)?.[1] ||
+    null;
+
+  return { title: cleanShopeeTitle(ogTitle), image: ogImage };
+}
+
 function pickShopeeImage($: cheerio.CheerioAPI): string | null {
   const hero =
     $('img[elementtiming="shopee:heroComponentPaint"]').attr("src") ||
     $('img[fetchpriority="high"]').attr("src") ||
-    $('picture img').first().attr("src");
+    $("picture img").first().attr("src");
 
   const ogImage = $('meta[property="og:image"]').attr("content");
   if (hero) return hero;
@@ -222,6 +308,17 @@ function extractFromInitialState(html: string): ShopeeProductData | null {
 function extractFromHtml(html: string): ShopeeProductData | null {
   const fromState = extractFromInitialState(html);
   if (fromState?.title) return fromState;
+
+  const fromRegex = extractMetaRegex(html);
+  if (fromRegex) {
+    return {
+      title: fromRegex.title,
+      image_url: fromRegex.image,
+      price: null,
+      original_price: null,
+      discount_percent: null,
+    };
+  }
 
   const nextDataMatch = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
   if (nextDataMatch) {
@@ -289,39 +386,32 @@ export async function fetchShopeeFromHtml(url: string): Promise<ShopeeProductDat
 }
 
 async function fetchShopeePageWithAgent(url: string, userAgent: string): Promise<ShopeeProductData | null> {
-  try {
-    const res = await proxyFetch(
-      url,
-      {
-        headers: {
-          "User-Agent": userAgent,
-          Accept: "text/html,application/xhtml+xml",
-          "Accept-Language": "pt-BR,pt;q=0.9",
-        },
-        redirect: "follow",
-      },
-      false
-    );
-    if (!res.ok) return null;
-    const html = await res.text();
-    if (html.includes('"error":90309999')) return null;
-    return extractFromHtml(html);
-  } catch {
-    return null;
-  }
+  let html = await directFetch(url, userAgent);
+  if (!html) html = await fetchHtmlViaScraperApi(url, userAgent);
+  if (!html) return null;
+  return extractFromHtml(html);
 }
 
-export async function fetchShopeeFromSocialCrawler(url: string): Promise<ShopeeProductData | null> {
-  for (const agent of SOCIAL_CRAWLER_AGENTS) {
-    const data = await fetchShopeePageWithAgent(url, agent);
-    if (data?.title && !isGenericShopeeTitle(data.title)) return data;
+export async function fetchShopeeFromSocialCrawler(urls: string[]): Promise<ShopeeProductData | null> {
+  const uniqueUrls = [...new Set(urls.filter(Boolean))];
+
+  for (const url of uniqueUrls) {
+    for (const agent of SOCIAL_CRAWLER_AGENTS) {
+      const data = await fetchShopeePageWithAgent(url, agent);
+      if (data?.title && data.title.length >= 4 && !isGenericShopeeTitle(data.title)) {
+        return data;
+      }
+    }
   }
   return null;
 }
 
-async function fetchFromAffiliateApi(ids: ShopeeIds): Promise<ShopeeProductData | null> {
-  const appId = process.env.SHOPEE_AFFILIATE_APP_ID;
-  const secret = process.env.SHOPEE_AFFILIATE_SECRET;
+export async function fetchFromAffiliateApi(
+  ids: ShopeeIds,
+  credentials?: ShopeeApiCredentials | null
+): Promise<ShopeeProductData | null> {
+  const appId = credentials?.appId || process.env.SHOPEE_AFFILIATE_APP_ID;
+  const secret = credentials?.secret || process.env.SHOPEE_AFFILIATE_SECRET;
   if (!appId || !secret) return null;
 
   const query = `{ productOfferV2(shopId:${ids.shopId}, itemId:${ids.itemId}, limit:1) { nodes { productName imageUrl priceMin priceMax priceDiscountRate productLink offerLink } } }`;
@@ -340,6 +430,7 @@ async function fetchFromAffiliateApi(ids: ShopeeIds): Promise<ShopeeProductData 
         Authorization: `SHA256 Credential=${appId},Timestamp=${timestamp},Signature=${signature}`,
       },
       body: payload,
+      signal: AbortSignal.timeout(20000),
     });
     if (!res.ok) return null;
 
@@ -387,7 +478,7 @@ async function fetchShopeeWithBrowser(url: string): Promise<ShopeeProductData | 
     const headlessType = isLocal ? true : "shell";
     const launchArgs = isLocal
       ? ["--no-sandbox", "--disable-setuid-sandbox"]
-      : await puppeteer.default.defaultArgs({ args: chromium.default.args, headless: headlessType });
+      : puppeteer.default.defaultArgs({ args: chromium.default.args, headless: headlessType });
 
     const browser = await puppeteer.default.launch({
       args: launchArgs,
@@ -398,68 +489,23 @@ async function fetchShopeeWithBrowser(url: string): Promise<ShopeeProductData | 
 
     try {
       const page = await browser.newPage();
-      await page.setUserAgent(USER_AGENT);
+      await page.setUserAgent("facebookexternalhit/1.1");
       await page.goto(url, { waitUntil: "networkidle2", timeout: 45000 });
 
       await page
         .waitForFunction(
           () => {
-            const state = (window as unknown as { __INITIAL_STATE__?: { item?: { item?: { name?: string } } } })
-              .__INITIAL_STATE__;
-            if (state?.item?.item?.name) return true;
             const title = document.querySelector("meta[property='og:title']")?.getAttribute("content");
-            return Boolean(title && title.length > 5 && !title.toLowerCase().includes("shopee brasil"));
+            if (title && title.length > 5 && !title.toLowerCase().includes("shopee brasil")) return true;
+            const h1 = document.querySelector("h1")?.textContent?.trim();
+            return Boolean(h1 && h1.length > 4);
           },
           { timeout: 20000 }
         )
         .catch(() => null);
 
-      const data = await page.evaluate(() => {
-        const state = (window as unknown as {
-          __INITIAL_STATE__?: {
-            item?: { item?: Record<string, unknown> };
-            itemDetail?: { item?: Record<string, unknown> };
-          };
-        }).__INITIAL_STATE__;
-
-        const item = state?.item?.item || state?.itemDetail?.item;
-        if (item && typeof item === "object" && item.name) {
-          const priceRaw = (item.price ?? item.price_min) as number | undefined;
-          const originalRaw = (item.price_before_discount ?? item.price_strike) as number | undefined;
-          const price = priceRaw != null ? (priceRaw >= 100000 ? priceRaw / 100000 : priceRaw) : null;
-          const original =
-            originalRaw != null ? (originalRaw >= 100000 ? originalRaw / 100000 : originalRaw) : null;
-          const imageId = (item.image || (item.images as string[] | undefined)?.[0]) as string | undefined;
-
-          return {
-            title: String(item.name).trim(),
-            image_url: imageId
-              ? imageId.startsWith("http")
-                ? imageId
-                : `https://cf.shopee.com.br/file/${imageId}`
-              : null,
-            price,
-            original_price: original,
-            discount_percent:
-              original && price ? Math.round(((original - price) / original) * 100) : null,
-          };
-        }
-
-        const ogTitle = document.querySelector("meta[property='og:title']")?.getAttribute("content")?.trim();
-        const ogImage = document.querySelector("meta[property='og:image']")?.getAttribute("content");
-        if (ogTitle && !ogTitle.toLowerCase().includes("shopee brasil")) {
-          return {
-            title: ogTitle.replace(/\s*[-|].*Shopee.*$/i, "").trim(),
-            image_url: ogImage || null,
-            price: null,
-            original_price: null,
-            discount_percent: null,
-          };
-        }
-        return null;
-      });
-
-      return data;
+      const html = await page.content();
+      return extractFromHtml(html);
     } finally {
       await browser.close();
     }
@@ -469,19 +515,25 @@ async function fetchShopeeWithBrowser(url: string): Promise<ShopeeProductData | 
   }
 }
 
-export async function scrapeShopeeProduct(resolvedUrl: string): Promise<ShopeeProductData> {
+export async function scrapeShopeeProduct(
+  resolvedUrl: string,
+  credentials?: ShopeeApiCredentials | null
+): Promise<ShopeeProductData> {
   const ids = parseShopeeIds(resolvedUrl);
   if (!ids) {
     throw new Error("Link Shopee inválido. Cole o link completo da página do produto.");
   }
 
   const canonical = canonicalShopeeUrl(ids);
+  const slugUrl = await resolveShopeeSlugUrl(canonical);
+  const urlsToTry = [...new Set([slugUrl, canonical, resolvedUrl])];
+
   const attempts: Array<() => Promise<ShopeeProductData | null>> = [
-    () => fetchFromAffiliateApi(ids),
-    () => fetchShopeeFromSocialCrawler(canonical),
+    () => fetchFromAffiliateApi(ids, credentials),
+    () => fetchShopeeFromSocialCrawler(urlsToTry),
     () => fetchShopeeFromApi(canonical, ids),
     () => fetchShopeeFromHtml(canonical),
-    () => fetchShopeeWithBrowser(canonical),
+    () => fetchShopeeWithBrowser(slugUrl),
   ];
 
   for (const attempt of attempts) {

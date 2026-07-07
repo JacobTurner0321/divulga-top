@@ -7,11 +7,13 @@ import {
   deleteProduct,
   toggleProduct,
   getAffiliates,
+  getSettings,
 } from "@/lib/db";
 import { applyAffiliateId } from "@/lib/affiliate";
 import { scrapeProduct, parseMultipleUrls } from "@/lib/scraper";
 import { isValidProductTitle } from "@/lib/validate";
 
+export const runtime = "nodejs";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
@@ -42,11 +44,16 @@ export async function POST(req: NextRequest) {
 
   const affiliates = await getAffiliates(siteId);
   const affiliateMap = Object.fromEntries(affiliates.map((a) => [a.platform, a.affiliate_id]));
+  const settings = await getSettings();
+  const shopeeCredentials =
+    settings.shopee_affiliate_app_id && settings.shopee_affiliate_secret
+      ? { appId: settings.shopee_affiliate_app_id, secret: settings.shopee_affiliate_secret }
+      : null;
   const results = [];
 
   for (const url of urls.slice(0, 30)) {
     try {
-      const scraped = await scrapeProduct(url);
+      const scraped = await scrapeProduct(url, shopeeCredentials);
       if (!isValidProductTitle(scraped.title)) {
         throw new Error("Dados do produto inválidos. Use o link completo da página.");
       }

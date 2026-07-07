@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionEmail } from "@/lib/auth";
-import { getAffiliates, saveAffiliatesBatch, Platform } from "@/lib/db";
+import { getAffiliates, saveAffiliatesBatch, getSettings, saveSettings, Platform } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +8,8 @@ export async function GET(req: NextRequest) {
   if (!(await getSessionEmail())) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const siteId = parseInt(req.nextUrl.searchParams.get("site_id") || "1", 10);
-  return NextResponse.json(await getAffiliates(siteId));
+  const [affiliates, settings] = await Promise.all([getAffiliates(siteId), getSettings()]);
+  return NextResponse.json({ affiliates, settings });
 }
 
 export async function POST(req: NextRequest) {
@@ -21,8 +22,15 @@ export async function POST(req: NextRequest) {
 
     await saveAffiliatesBatch(siteId, affiliates);
 
-    const saved = await getAffiliates(siteId);
-    return NextResponse.json({ ok: true, affiliates: saved });
+    if (body.settings) {
+      await saveSettings({
+        shopee_affiliate_app_id: body.settings.shopee_affiliate_app_id || "",
+        shopee_affiliate_secret: body.settings.shopee_affiliate_secret || "",
+      });
+    }
+
+    const [saved, settings] = await Promise.all([getAffiliates(siteId), getSettings()]);
+    return NextResponse.json({ ok: true, affiliates: saved, settings });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "Erro ao salvar" },

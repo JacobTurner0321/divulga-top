@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionEmail } from "@/lib/auth";
-import { getAllProductsAdmin, getProductById, updateProduct, getAffiliates, removeInvalidProducts } from "@/lib/db";
+import { getAllProductsAdmin, getProductById, updateProduct, getAffiliates, getSettings, removeInvalidProducts } from "@/lib/db";
 import { applyAffiliateId } from "@/lib/affiliate";
 import { scrapeProduct } from "@/lib/scraper";
 
+export const runtime = "nodejs";
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
@@ -13,11 +14,16 @@ export async function POST(req: NextRequest) {
   const { site_id } = await req.json().catch(() => ({}));
   const removed = await removeInvalidProducts();
   const products = await getAllProductsAdmin(site_id ? parseInt(site_id, 10) : undefined);
+  const settings = await getSettings();
+  const shopeeCredentials =
+    settings.shopee_affiliate_app_id && settings.shopee_affiliate_secret
+      ? { appId: settings.shopee_affiliate_app_id, secret: settings.shopee_affiliate_secret }
+      : null;
   const results = [];
 
   for (const product of products) {
     try {
-      const scraped = await scrapeProduct(product.source_url);
+      const scraped = await scrapeProduct(product.source_url, shopeeCredentials);
       const affiliates = await getAffiliates(product.site_id);
       const affiliateMap = Object.fromEntries(affiliates.map((a) => [a.platform, a.affiliate_id]));
       const affiliateUrl = applyAffiliateId(
@@ -60,7 +66,12 @@ export async function PUT(req: NextRequest) {
   if (!product) return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
 
   try {
-    const scraped = await scrapeProduct(product.source_url);
+    const settings = await getSettings();
+    const shopeeCredentials =
+      settings.shopee_affiliate_app_id && settings.shopee_affiliate_secret
+        ? { appId: settings.shopee_affiliate_app_id, secret: settings.shopee_affiliate_secret }
+        : null;
+    const scraped = await scrapeProduct(product.source_url, shopeeCredentials);
     const affiliates = await getAffiliates(product.site_id);
     const affiliateMap = Object.fromEntries(affiliates.map((a) => [a.platform, a.affiliate_id]));
     const affiliateUrl = applyAffiliateId(

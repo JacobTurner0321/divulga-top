@@ -22,6 +22,8 @@ export default function AfiliadosAdmin() {
   const [sites, setSites] = useState<Site[]>([]);
   const [siteId, setSiteId] = useState(1);
   const [affiliates, setAffiliates] = useState<Record<string, string>>({});
+  const [shopeeAppId, setShopeeAppId] = useState("");
+  const [shopeeSecret, setShopeeSecret] = useState("");
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -43,15 +45,20 @@ export default function AfiliadosAdmin() {
         router.push("/admin/login");
         return;
       }
-      const data: Affiliate[] = await res.json();
+      const data = await res.json();
+      const list: Affiliate[] = data.affiliates || data;
       const map: Record<string, string> = {};
       PLATFORMS.forEach((p) => {
         map[p] = "";
       });
-      data.forEach((a) => {
+      list.forEach((a) => {
         map[a.platform] = a.affiliate_id || "";
       });
       setAffiliates(map);
+      if (data.settings) {
+        setShopeeAppId(data.settings.shopee_affiliate_app_id || "");
+        setShopeeSecret(data.settings.shopee_affiliate_secret || "");
+      }
     } finally {
       setLoadingAffiliates(false);
     }
@@ -69,6 +76,10 @@ export default function AfiliadosAdmin() {
       body: JSON.stringify({
         site_id: siteId,
         affiliates: PLATFORMS.map((p) => ({ platform: p, affiliate_id: affiliates[p] || "" })),
+        settings: {
+          shopee_affiliate_app_id: shopeeAppId,
+          shopee_affiliate_secret: shopeeSecret,
+        },
       }),
     });
 
@@ -85,6 +96,10 @@ export default function AfiliadosAdmin() {
         setAffiliates(map);
       } else {
         await loadAffiliates(siteId);
+      }
+      if (data.settings) {
+        setShopeeAppId(data.settings.shopee_affiliate_app_id || "");
+        setShopeeSecret(data.settings.shopee_affiliate_secret || "");
       }
       setTimeout(() => setSaved(false), 4000);
     } else {
@@ -147,6 +162,43 @@ export default function AfiliadosAdmin() {
             />
           </div>
         ))}
+        <div className="lg:col-span-3 rounded-2xl border border-orange-500/20 bg-[#1a1d27] p-6">
+          <h3 className="mb-1 font-semibold">Shopee — API Open (opcional)</h3>
+          <p className="mb-4 text-xs text-slate-400">
+            Melhora importação de produtos Shopee (nome, preço, imagem). Obtenha em{" "}
+            <a
+              href="https://affiliate.shopee.com.br/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-emerald-400 hover:underline"
+            >
+              affiliate.shopee.com.br
+            </a>{" "}
+            → Open API.
+          </p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs text-slate-400">App ID</label>
+              <input
+                type="text"
+                value={shopeeAppId}
+                onChange={(e) => setShopeeAppId(e.target.value)}
+                placeholder="Shopee Affiliate App ID"
+                className="w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm outline-none focus:border-emerald-500"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-slate-400">Secret</label>
+              <input
+                type="password"
+                value={shopeeSecret}
+                onChange={(e) => setShopeeSecret(e.target.value)}
+                placeholder="Shopee Affiliate Secret"
+                className="w-full rounded-xl border border-white/10 bg-[#0f1117] px-4 py-3 text-sm outline-none focus:border-emerald-500"
+              />
+            </div>
+          </div>
+        </div>
         <div className="lg:col-span-3">
           <button
             type="submit"

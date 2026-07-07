@@ -2,7 +2,7 @@ import * as cheerio from "cheerio";
 import type { Platform } from "./types";
 import { detectPlatform } from "./affiliate";
 import { isValidProductTitle } from "./validate";
-import { scrapeShopeeProduct, parseShopeeIds, canonicalShopeeUrl } from "./shopee";
+import { scrapeShopeeProduct, parseShopeeIds, canonicalShopeeUrl, type ShopeeApiCredentials } from "./shopee";
 
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -227,7 +227,10 @@ async function scrapeHtml(url: string, platform: Platform): Promise<Partial<Scra
   return { title, image_url, price, original_price, discount_percent };
 }
 
-export async function scrapeProduct(rawUrl: string): Promise<ScrapedProduct> {
+export async function scrapeProduct(
+  rawUrl: string,
+  shopeeCredentials?: ShopeeApiCredentials | null
+): Promise<ScrapedProduct> {
   let normalized = rawUrl.trim();
   normalized = await resolveRedirects(normalized);
 
@@ -239,7 +242,7 @@ export async function scrapeProduct(rawUrl: string): Promise<ScrapedProduct> {
   if (platform === "shopee") {
     const ids = parseShopeeIds(normalized);
     const sourceUrl = ids ? canonicalShopeeUrl(ids) : normalized;
-    const shopeeData = await scrapeShopeeProduct(normalized);
+    const shopeeData = await scrapeShopeeProduct(normalized, shopeeCredentials);
 
     return {
       title: shopeeData.title.trim(),

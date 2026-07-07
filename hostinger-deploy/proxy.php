@@ -3,7 +3,7 @@
  * Reverse proxy — serves the Vercel app at divulga.top (no DNS change needed).
  * Upload to public_html and point .htaccess here.
  */
-define('BACKEND', 'https://divulga-top.vercel.app');
+define('BACKEND', 'https://divulga-top-mu.vercel.app');
 
 $uri = $_SERVER['REQUEST_URI'] ?? '/';
 $url = BACKEND . $uri;

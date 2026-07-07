@@ -3,7 +3,7 @@ import { getSessionEmail } from "@/lib/auth";
 import {
   getAllProductsAdmin,
   getProducts,
-  insertProduct,
+  insertProductsBatch,
   deleteProduct,
   toggleProduct,
   getAffiliates,
@@ -49,7 +49,14 @@ export async function POST(req: NextRequest) {
     settings.shopee_affiliate_app_id && settings.shopee_affiliate_secret
       ? { appId: settings.shopee_affiliate_app_id, secret: settings.shopee_affiliate_secret }
       : null;
-  const results = [];
+  const results: Array<{
+    ok: boolean;
+    id?: number;
+    title?: string;
+    url?: string;
+    error?: string;
+  }> = [];
+  const toInsert: Array<Omit<import("@/lib/types").Product, "id" | "created_at" | "active">> = [];
 
   for (const url of urls.slice(0, 30)) {
     try {
@@ -62,7 +69,7 @@ export async function POST(req: NextRequest) {
         scraped.platform,
         affiliateMap[scraped.platform] || ""
       );
-      const id = await insertProduct({
+      toInsert.push({
         site_id: siteId,
         title: scraped.title,
         image_url: scraped.image_url,
@@ -73,9 +80,19 @@ export async function POST(req: NextRequest) {
         source_url: scraped.source_url,
         affiliate_url: affiliateUrl,
       });
-      results.push({ ok: true, id, title: scraped.title, url });
+      results.push({ ok: true, title: scraped.title, url });
     } catch (e) {
       results.push({ ok: false, url, error: e instanceof Error ? e.message : "Erro ao importar" });
+    }
+  }
+
+  if (toInsert.length > 0) {
+    const ids = await insertProductsBatch(toInsert);
+    let idIndex = 0;
+    for (let i = 0; i < results.length; i++) {
+      if (results[i].ok) {
+        results[i].id = ids[idIndex++];
+      }
     }
   }
 

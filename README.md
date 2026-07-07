@@ -4,9 +4,9 @@ Site agregador de ofertas com painel admin, gestão de IDs de afiliado e importa
 
 ## URLs
 
-- **Produção (Vercel):** https://divulga-top.vercel.app
+- **Produção (Vercel):** https://divulga-top-mu.vercel.app
 - **Domínio cliente:** https://divulga.top (requer DNS apontando para Vercel)
-- **Admin:** https://divulga-top.vercel.app/admin
+- **Admin:** https://divulga-top-mu.vercel.app/admin
 
 ## Login Admin
 

@@ -149,6 +149,37 @@ function normalizeStore(store: Store): { store: Store; changed: boolean } {
     changed = true;
   }
 
+  const maxId = store.products.reduce((max, product) => Math.max(max, product.id), 0);
+  if (!store.nextProductId || store.nextProductId <= maxId) {
+    store.nextProductId = maxId + 1;
+    changed = true;
+  }
+
+  const dedupedProducts: Product[] = [];
+  const seen = new Set<string>();
+  for (const product of store.products) {
+    const key = `${product.site_id}:${product.source_url}`;
+    if (seen.has(key)) {
+      changed = true;
+      continue;
+    }
+    seen.add(key);
+    dedupedProducts.push(product);
+  }
+  if (dedupedProducts.length !== store.products.length) {
+    store.products = dedupedProducts;
+    changed = true;
+  }
+
+  const usedIds = new Set<number>();
+  for (const product of store.products) {
+    if (usedIds.has(product.id)) {
+      product.id = store.nextProductId++;
+      changed = true;
+    }
+    usedIds.add(product.id);
+  }
+
   return { store, changed };
 }
 
@@ -283,17 +314,42 @@ export async function getAllProductsAdmin(siteId?: number) {
 }
 
 export async function insertProduct(data: Omit<Product, "id" | "created_at" | "active">) {
-  const store = await getStore();
-  const id = store.nextProductId++;
-  const product: Product = {
-    ...data,
-    id,
-    active: 1,
-    created_at: new Date().toISOString(),
-  };
-  store.products.unshift(product);
-  await persistStore(store);
+  const [id] = await insertProductsBatch([data]);
   return id;
+}
+
+export async function insertProductsBatch(
+  items: Array<Omit<Product, "id" | "created_at" | "active">>
+): Promise<number[]> {
+  if (items.length === 0) return [];
+
+  const store = await getStore();
+  const ids: number[] = [];
+
+  for (const data of items) {
+    const existing = store.products.find(
+      (p) => p.site_id === data.site_id && p.source_url === data.source_url
+    );
+
+    if (existing) {
+      Object.assign(existing, data, { active: 1 });
+      ids.push(existing.id);
+      continue;
+    }
+
+    const id = store.nextProductId++;
+    const product: Product = {
+      ...data,
+      id,
+      active: 1,
+      created_at: new Date().toISOString(),
+    };
+    store.products.unshift(product);
+    ids.push(id);
+  }
+
+  await persistStore(store);
+  return ids;
 }
 
 export async function updateProduct(

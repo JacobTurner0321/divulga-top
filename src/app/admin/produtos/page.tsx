@@ -227,7 +227,7 @@ export default function ProdutosAdmin() {
       </div>
       <div className="space-y-3">
         {products.map((p) => (
-          <div key={p.id} className="flex items-center gap-4 rounded-xl border border-white/5 bg-[#1a1d27] p-4">
+          <div key={`${p.id}-${p.title}`} className="flex items-center gap-4 rounded-xl border border-white/5 bg-[#1a1d27] p-4">
             {p.image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={p.image_url} alt="" className="h-14 w-14 rounded-lg object-cover" />
